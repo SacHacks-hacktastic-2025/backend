@@ -59,7 +59,7 @@ public class GitHubController {
   @Autowired
   private RestTemplate restTemplate;
   @Operation(summary = "사용자 정보 조회", security = {@SecurityRequirement(name = "Bearer Authentication")})
-  @GetMapping("/api/v1/github/user")
+  @GetMapping("/user")
   public ResponseEntity<?> getUserInfo(@RequestHeader("Authorization") String accessToken) {
     System.out.println("Authorization Header: " + accessToken);
     try {
