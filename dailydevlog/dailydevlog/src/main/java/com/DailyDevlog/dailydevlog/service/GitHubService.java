@@ -43,4 +43,11 @@ public class GitHubService {
 
     return simplifiedIssues;
   }
+
+  public Map<String, Object> getCommitChanges(String owner, String repo, String sha) {
+    String url = String.format("https://api.github.com/repos/%s/%s/commits/%s", owner, repo, sha);
+    return restTemplate.getForObject(url, Map.class);
+  }
+
+
 }
