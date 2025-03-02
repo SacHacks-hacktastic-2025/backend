@@ -24,11 +24,17 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-@RestController
-@RequestMapping("/api/v1/github")
-@Tag(name = "GitHub OAuth", description = "GitHub 로그인 및 사용자 정보 API")
+/**
+ * Controller class for managing GitHub OAuth authentication, user information retrieval,
+ * commit and issue inquiries, and automated GPT code reviews.
+ * Provides API endpoints for interaction with GitHub services.
+ */
+@RestController // Indicates that this class handles HTTP requests and returns JSON responses.
+@RequestMapping("/api/v1/github") // Base URL for all GitHub-related API endpoints.
+@Tag(name = "GitHub OAuth", description = "GitHub login and user information API")
 public class GitHubController {
 
+  // Injecting GitHub OAuth client ID, secret, and redirect URI from application properties.
   @Value("${github.client.id}")
   private String clientId;
 
@@ -38,7 +44,12 @@ public class GitHubController {
   @Value("${github.redirect.uri}")
   private String redirectUri;
 
-  @Operation(summary = "GitHub 로그인", description = "GitHub OAuth 인증을 시작합니다.")
+  /**
+   * Starts GitHub OAuth authentication by redirecting to the GitHub login page.
+   *
+   * @return A redirect URL to the GitHub OAuth login page.
+   */
+  @Operation(summary = "GitHub Login", description = "GitHub OAuth Starts authentication.")
   @GetMapping("/login")
   public String login() {
     String githubLoginUrl = String.format(
@@ -48,7 +59,14 @@ public class GitHubController {
     return "redirect:" + githubLoginUrl;
   }
 
-  @Operation(summary = "GitHub 인증 콜백", description = "GitHub 인증 후 호출되는 콜백 URL")
+  /**
+   * Handles the GitHub OAuth callback after authentication.
+   * Exchanges the received authorization code for an access token.
+   *
+   * @param code The authorization code returned by GitHub.
+   * @return The access token received from GitHub.
+   */
+  @Operation(summary = "GitHub Authentication callback", description = "GitHub Callback Called After Authentication URL")
   @GetMapping("/callback")
   public String callback(@RequestParam(name = "code") String code) {
     String accessTokenUrl = String.format(
@@ -65,7 +83,14 @@ public class GitHubController {
 
   @Autowired
   private RestTemplate restTemplate;
-  @Operation(summary = "사용자 정보 조회", security = {@SecurityRequirement(name = "Bearer Authentication")})
+
+  /**
+   * Retrieves GitHub user information using the provided access token.
+   *
+   * @param accessToken The access token in the Authorization header.
+   * @return User information or an error message if the request fails.
+   */
+  @Operation(summary = "User Information Inquiry", security = {@SecurityRequirement(name = "Bearer Authentication")})
   @GetMapping("/user")
   public ResponseEntity<?> getUserInfo(@RequestHeader("Authorization") String accessToken) {
     System.out.println("Authorization Header: " + accessToken);
@@ -87,72 +112,88 @@ public class GitHubController {
         return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
       }
     } catch (Exception e) {
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("사용자 정보를 가져오는 중 오류 발생: " + e.getMessage());
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .body("Error getting user information: " + e.getMessage());
     }
   }
+
   @Autowired
   private GitHubService gitHubService;
 
-  @Operation(summary = "GitHub 커밋 조회", description = "특정 레포지토리의 커밋 목록을 조회합니다.")
+  /**
+   * Retrieves a list of commits from a specific GitHub repository.
+   *
+   * @param owner The repository owner.
+   * @param repo The repository name.
+   * @param author (Optional) The GitHub ID of the commit author.
+   * @param branch (Optional) The repository branch, defaults to "main".
+   * @return A list of commits with metadata.
+   */
+  @Operation(summary = "GitHub Commit Inquiry", description = "Look up the list of commitments in a specific repository.")
   @GetMapping("/commits")
   public List<Map<String, Object>> getGitHubCommits(
-      @Parameter(description = "GitHub 레포지토리 소유자", required = true)
-      @RequestParam String owner,
-      @Parameter(description = "GitHub 레포지토리 이름", required = true)
-      @RequestParam String repo,
-      @Parameter(description = "커밋 작성자 GitHub ID", required = false)
-      @RequestParam(required = false) String author,
-      @Parameter(description = "브랜치 이름 (기본값: main)", required = false)
-      @RequestParam(required = false, defaultValue = "main") String branch) {
-
+      @Parameter(description = "GitHub a repository owner", required = true) @RequestParam String owner,
+      @Parameter(description = "GitHub Repository Name", required = true) @RequestParam String repo,
+      @Parameter(description = "Commit Author GitHub ID", required = false) @RequestParam(required = false) String author,
+      @Parameter(description = "Branch name (Default value: main)", required = false) @RequestParam(required = false, defaultValue = "main") String branch
+  ) {
     return gitHubService.getUserCommits(owner, repo, author, branch);
   }
 
-  @Operation(summary = "GitHub 이슈 간소화된 조회", description = "특정 레포지토리의 이슈 목록을 간결하게 조회합니다.")
+  /**
+   * Retrieves a simplified list of issues from a specific GitHub repository.
+   *
+   * @param owner The repository owner.
+   * @param repo The repository name.
+   * @return A list of issues with basic details.
+   */
+  @Operation(summary = "GitHub Issue Simplified Inquiry", description = "Briefly look up the list of issues in a particular repository.")
   @GetMapping("/issues")
   public List<Map<String, Object>> getSimplifiedRepositoryIssues(
-      @Parameter(description = "GitHub 레포지토리 소유자", required = true)
-      @RequestParam String owner,
-      @Parameter(description = "GitHub 레포지토리 이름", required = true)
-      @RequestParam String repo) {
-
+      @Parameter(description = "GitHub Repository Owner", required = true) @RequestParam String owner,
+      @Parameter(description = "GitHub Repository Name", required = true) @RequestParam String repo
+  ) {
     return gitHubService.getRepositoryIssues(owner, repo);
   }
 
   @Autowired
   private CodeReviewService codeReviewService;
-  @Operation(summary = "자동 GPT 코드 리뷰", description = "GitHub 레포지토리의 커밋과 코드 변경 내역을 자동으로 가져와 GPT를 통해 코드 리뷰를 수행합니다.")
+
+  /**
+   * Automatically performs a code review using GPT by analyzing commit messages and code changes.
+   *
+   * @param owner The repository owner.
+   * @param repo The repository name.
+   * @param author (Optional) The commit author.
+   * @param branch (Optional) The branch to review, defaults to "main".
+   * @return Code review suggestions from GPT.
+   */
+  @Operation(summary = "Automatic GPT Code Review", description = "Automatically import commitments and code changes from the GitHub repository and conduct code reviews through GPT.")
   @GetMapping("/auto-code-review")
   public String autoCodeReview(
-      @Parameter(description = "GitHub 레포지토리 소유자", required = true) @RequestParam String owner,
-      @Parameter(description = "GitHub 레포지토리 이름", required = true) @RequestParam String repo,
-      @Parameter(description = "커밋 작성자 GitHub ID", required = false) @RequestParam(required = false) String author,
-      @Parameter(description = "브랜치 이름 (기본값: main)", required = false) @RequestParam(required = false, defaultValue = "main") String branch
+      @Parameter(description = "GitHub Repository Owner", required = true) @RequestParam String owner,
+      @Parameter(description = "GitHub Repository Name", required = true) @RequestParam String repo,
+      @Parameter(description = "Commit Author GitHub ID", required = false) @RequestParam(required = false) String author,
+      @Parameter(description = "Branch name (Default value: main)", required = false) @RequestParam(required = false, defaultValue = "main") String branch
   ) {
     List<Map<String, Object>> commits = gitHubService.getUserCommits(owner, repo, author, branch);
     StringBuilder commitMessages = new StringBuilder();
     StringBuilder codeChanges = new StringBuilder();
 
     for (Map<String, Object> commit : commits) {
-      // 'commit.get("commit")'의 결과를 'Map<String, Object>' 타입으로 변환
       Map<String, Object> commitData = (Map<String, Object>) commit.get("commit");
-
-      // 이제 안전하게 "message" 필드에 접근할 수 있음
       String message = (String) commitData.get("message");
       commitMessages.append(message).append("\n");
 
-      // SHA 값을 가져와서 커밋 변경 내역 조회
       String sha = (String) commit.get("sha");
       Map<String, Object> commitDetails = gitHubService.getCommitChanges(owner, repo, sha);
 
-      // 변경된 파일 내역 처리
       List<Map<String, Object>> files = (List<Map<String, Object>>) commitDetails.get("files");
       for (Map<String, Object> file : files) {
         codeChanges.append("File: ").append(file.get("filename")).append("\n")
             .append(file.get("patch")).append("\n\n");
       }
     }
-
     return codeReviewService.analyzeCodeAndSuggestImprovements(commitMessages.toString(), codeChanges.toString());
   }
 }
