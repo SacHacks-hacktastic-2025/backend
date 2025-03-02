@@ -106,4 +106,15 @@ public class GitHubController {
 
     return gitHubService.getUserCommits(owner, repo, author, branch);
   }
+
+  @Operation(summary = "GitHub 이슈 간소화된 조회", description = "특정 레포지토리의 이슈 목록을 간결하게 조회합니다.")
+  @GetMapping("/issues")
+  public List<Map<String, Object>> getSimplifiedRepositoryIssues(
+      @Parameter(description = "GitHub 레포지토리 소유자", required = true)
+      @RequestParam String owner,
+      @Parameter(description = "GitHub 레포지토리 이름", required = true)
+      @RequestParam String repo) {
+
+    return gitHubService.getRepositoryIssues(owner, repo);
+  }
 }
