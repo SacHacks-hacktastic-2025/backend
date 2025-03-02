@@ -176,24 +176,46 @@ public class GitHubController {
       @Parameter(description = "Commit Author GitHub ID", required = false) @RequestParam(required = false) String author,
       @Parameter(description = "Branch name (Default value: main)", required = false) @RequestParam(required = false, defaultValue = "main") String branch
   ) {
+    // 1. Fetch all commits from the GitHub repository
     List<Map<String, Object>> commits = gitHubService.getUserCommits(owner, repo, author, branch);
+
     StringBuilder commitMessages = new StringBuilder();
     StringBuilder codeChanges = new StringBuilder();
 
-    for (Map<String, Object> commit : commits) {
+    // 2. Iterate over the commits and filter only the latest and 'bug' related commits
+    for (int i = 0; i < commits.size(); i++) {
+      Map<String, Object> commit = commits.get(i);
       Map<String, Object> commitData = (Map<String, Object>) commit.get("commit");
+
       String message = (String) commitData.get("message");
-      commitMessages.append(message).append("\n");
 
-      String sha = (String) commit.get("sha");
-      Map<String, Object> commitDetails = gitHubService.getCommitChanges(owner, repo, sha);
+      // 3. Always add the latest commit and filter commits containing 'bug' keyword
+      if (i == 0 || message.toLowerCase().contains("bug")) {
+        commitMessages.append(message).append("\n");
 
-      List<Map<String, Object>> files = (List<Map<String, Object>>) commitDetails.get("files");
-      for (Map<String, Object> file : files) {
-        codeChanges.append("File: ").append(file.get("filename")).append("\n")
-            .append(file.get("patch")).append("\n\n");
+        String sha = (String) commit.get("sha");
+        Map<String, Object> commitDetails = gitHubService.getCommitChanges(owner, repo, sha);
+
+        // 4. Extract and append code changes related to filtered commits
+        List<Map<String, Object>> files = (List<Map<String, Object>>) commitDetails.get("files");
+        for (Map<String, Object> file : files) {
+          codeChanges.append("File: ").append(file.get("filename")).append("\n")
+              .append(file.get("patch")).append("\n\n");
+        }
       }
     }
-    return codeReviewService.analyzeCodeAndSuggestImprovements(commitMessages.toString(), codeChanges.toString());
+
+    // 5. Truncate the commit messages and code changes to avoid exceeding token limits
+    if (commitMessages.length() > 5000) {
+      commitMessages.setLength(5000); // Limit commit messages to 5000 characters
+    }
+    if (codeChanges.length() > 10000) {
+      codeChanges.setLength(10000); // Limit code changes to 10000 characters
+    }
+
+    // 6. Send the filtered and truncated data to the GPT API for analysis
+    return codeReviewService.analyzeCodeAndSuggestImprovements(
+        commitMessages.toString(), codeChanges.toString()
+    );
   }
 }
