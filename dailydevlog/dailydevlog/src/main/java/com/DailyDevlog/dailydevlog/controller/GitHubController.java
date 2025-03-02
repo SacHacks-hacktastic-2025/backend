@@ -1,4 +1,6 @@
 package com.DailyDevlog.dailydevlog.controller;
+
+import com.DailyDevlog.dailydevlog.service.GitHubService;
 import org.springframework.beans.factory.annotation.Autowired;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +17,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.http.HttpStatus;
+import java.util.Map;
+import io.swagger.v3.oas.annotations.Parameter;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -82,5 +88,22 @@ public class GitHubController {
     } catch (Exception e) {
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("사용자 정보를 가져오는 중 오류 발생: " + e.getMessage());
     }
+  }
+  @Autowired
+  private GitHubService gitHubService;
+
+  @Operation(summary = "GitHub 커밋 조회", description = "특정 레포지토리의 커밋 목록을 조회합니다.")
+  @GetMapping("/commits")
+  public List<Map<String, Object>> getGitHubCommits(
+      @Parameter(description = "GitHub 레포지토리 소유자", required = true)
+      @RequestParam String owner,
+      @Parameter(description = "GitHub 레포지토리 이름", required = true)
+      @RequestParam String repo,
+      @Parameter(description = "커밋 작성자 GitHub ID", required = false)
+      @RequestParam(required = false) String author,
+      @Parameter(description = "브랜치 이름 (기본값: main)", required = false)
+      @RequestParam(required = false, defaultValue = "main") String branch) {
+
+    return gitHubService.getUserCommits(owner, repo, author, branch);
   }
 }
