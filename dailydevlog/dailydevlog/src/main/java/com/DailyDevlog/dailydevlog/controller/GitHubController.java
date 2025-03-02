@@ -1,5 +1,6 @@
 package com.DailyDevlog.dailydevlog.controller;
 
+import com.DailyDevlog.dailydevlog.service.CodeReviewService;
 import com.DailyDevlog.dailydevlog.service.GitHubService;
 import org.springframework.beans.factory.annotation.Autowired;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -116,5 +117,42 @@ public class GitHubController {
       @RequestParam String repo) {
 
     return gitHubService.getRepositoryIssues(owner, repo);
+  }
+
+  @Autowired
+  private CodeReviewService codeReviewService;
+  @Operation(summary = "자동 GPT 코드 리뷰", description = "GitHub 레포지토리의 커밋과 코드 변경 내역을 자동으로 가져와 GPT를 통해 코드 리뷰를 수행합니다.")
+  @GetMapping("/auto-code-review")
+  public String autoCodeReview(
+      @Parameter(description = "GitHub 레포지토리 소유자", required = true) @RequestParam String owner,
+      @Parameter(description = "GitHub 레포지토리 이름", required = true) @RequestParam String repo,
+      @Parameter(description = "커밋 작성자 GitHub ID", required = false) @RequestParam(required = false) String author,
+      @Parameter(description = "브랜치 이름 (기본값: main)", required = false) @RequestParam(required = false, defaultValue = "main") String branch
+  ) {
+    List<Map<String, Object>> commits = gitHubService.getUserCommits(owner, repo, author, branch);
+    StringBuilder commitMessages = new StringBuilder();
+    StringBuilder codeChanges = new StringBuilder();
+
+    for (Map<String, Object> commit : commits) {
+      // 'commit.get("commit")'의 결과를 'Map<String, Object>' 타입으로 변환
+      Map<String, Object> commitData = (Map<String, Object>) commit.get("commit");
+
+      // 이제 안전하게 "message" 필드에 접근할 수 있음
+      String message = (String) commitData.get("message");
+      commitMessages.append(message).append("\n");
+
+      // SHA 값을 가져와서 커밋 변경 내역 조회
+      String sha = (String) commit.get("sha");
+      Map<String, Object> commitDetails = gitHubService.getCommitChanges(owner, repo, sha);
+
+      // 변경된 파일 내역 처리
+      List<Map<String, Object>> files = (List<Map<String, Object>>) commitDetails.get("files");
+      for (Map<String, Object> file : files) {
+        codeChanges.append("File: ").append(file.get("filename")).append("\n")
+            .append(file.get("patch")).append("\n\n");
+      }
+    }
+
+    return codeReviewService.analyzeCodeAndSuggestImprovements(commitMessages.toString(), codeChanges.toString());
   }
 }
